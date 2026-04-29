@@ -8,9 +8,10 @@ from streamlit_folium import st_folium
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
+import plotly.express as px
 
 # --- 1. SETUP & LOADING ---
-st.set_page_config(page_title="Storm App", layout="wide")
+st.set_page_config(page_title="Storm Tracker", layout="wide")
 
 @st.cache_resource
 def load_data_and_model():
@@ -65,7 +66,18 @@ if page == "🔮 Predictor":
 
     # --- 2. CREATE THE INTERACTIVE MAP ---
     # Start the map at the current lat/lon
-    m = folium.Map(location=[st.session_state.lat, st.session_state.lon], zoom_start=4)
+    US_BOUNDS = {
+        "min_lat": 24.396308,  # Southern tip of Florida
+        "max_lat": 49.384358,  # Northern border
+        "min_lon": -125.0,     # West Coast
+        "max_lon": -66.93457   # East Coast
+    }
+
+    m = folium.Map(location=[st.session_state.lat, st.session_state.lon], zoom_start=4, min_zoom=4, min_lat=US_BOUNDS["min_lat"],
+        max_lat=US_BOUNDS["max_lat"],
+        min_lon=US_BOUNDS["min_lon"],
+        max_lon=US_BOUNDS["max_lon"],
+        max_bounds=True)
 
     # Add a marker for the currently selected spot
     folium.Marker(
@@ -147,24 +159,39 @@ if page == "🔮 Predictor":
             damage_pred = dmg_model.predict(dmg_input_df)[0]
             
             # Display results
-            st.success(f"**Predicted Storm:** {prediction}")
-            st.warning(f"**Estimated Property Damage:** ${damage_pred:,.2f}")
+            no_storm_index = list(model.classes_).index('No Storm') 
+            
+            # Get the exact probability of Clear Skies
+            clear_skies_prob = probabilities[no_storm_index]
+            
+            # "Any Storm" is just 100% minus the chance of Clear Skies
+            storm_prob = max(probabilities)
+
+            if storm_prob >= 0.35 and storm_prob != clear_skies_prob:
+                st.error(f"🚨 **STORM WARNING:** The probability ({storm_prob*100:.1f}%) exceeds your threshold!")
+                st.warning(f"**Estimated Property Damage:** ${damage_pred:,.2f}")
+            # Add your damage model prediction here if a storm is triggered!
+            else:
+                st.success(f"☀️ **CLEAR SKIES:** The probability ({storm_prob*100:.1f}%) did not trigger the warning.")
+            
                         
             # Create a dataframe for the probabilities to chart them easily
             prob_df = pd.DataFrame({
                 "Storm Type": classes,
                 "Probability": probabilities
             }).set_index("Storm Type")
+
+            filtered_prob_df = prob_df[prob_df["Probability"] >= 0.05]
             
             st.subheader("Probability Breakdown")
             
             # Display as a Bar Chart
-            st.bar_chart(prob_df)
+            st.bar_chart(filtered_prob_df)
             
             # Optional: Display raw text data like your original script
             with st.expander("See detailed percentages"):
                 for storm_name, prob in zip(classes, probabilities):
-                    if prob > 0:
+                    if prob >= 0.05:
                         st.write(f"{storm_name}: **{prob:.1%}**")
 
         except Exception as e:
@@ -206,6 +233,6 @@ elif page == "📊 Analytics":
     # -- PLOT THREE --
 
     st.subheader("Accuracy Check")
-    st.image("cm_storm_tracker.png", caption='pred vs actual confustion matrix', width=2000)
+    st.image("Confusion_Matrix_final.png", caption='pred vs actual confustion matrix', width=2000)
 
 

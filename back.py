@@ -8,11 +8,31 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import confusion_matrix
+import sqlite3
 
-df_fullclean = pd.read_csv('ultimate_clean.csv')
-#print(df_fullclean.head())
+#connecting sql database
+db_path = r'C:\Users\saikoka\Downloads\storm events cleaned\mydoc.db'
+conn = sqlite3.connect(db_path)
 
-# Combine similar rare classes into broader categories
+# 1. Define exactly which columns you need for your model
+query = """
+SELECT 
+    lat, 
+    lng, 
+    BEGIN_YEARMONTH,
+    BEGIN_DAY, 
+    EVENT_TYPE, 
+    DAMAGE_PROPERTY
+FROM ultimate_storm_data
+"""
+
+df_fullclean =  pd.read_sql_query(query, conn) 
+conn.close()
+print(f"Successfully loaded {len(df_fullclean)} storms!")
+
+print(df_fullclean.head(30))
+
+#Combine similar rare classes into broader categories
 df_fullclean['EVENT_TYPE'] = df_fullclean['EVENT_TYPE'].replace({
     'Marine Hail': 'Marine Event',
     'Marine High Wind': 'Marine Event',
@@ -43,30 +63,33 @@ for storm in sorted(storm_categories):
 
 df_fullclean['BEGIN_YEARMONTH'] = df_fullclean['BEGIN_YEARMONTH'].astype(str)
 df_fullclean['BEGIN_YEAR'] = df_fullclean['BEGIN_YEARMONTH'].str[0:4]
-df_fullclean['BEGIN_MONTH'] = df_fullclean['BEGIN_YEARMONTH'].str[5:6]
+df_fullclean['BEGIN_MONTH'] = df_fullclean['BEGIN_YEARMONTH'].str[4:6]
 df_fullclean['BEGIN_YEAR'] = df_fullclean['BEGIN_YEAR'].astype(int)
+
+df_fullclean['BEGIN_MONTH'] = pd.to_numeric(df_fullclean['BEGIN_MONTH'], errors='coerce')
+df_fullclean = df_fullclean.dropna(subset=['BEGIN_MONTH'])
 df_fullclean['BEGIN_MONTH'] = df_fullclean['BEGIN_MONTH'].astype(int)
 
-def assign_region(row):
-    lat = row['lat']
-    lon = row['lng']
+#def assign_region(row):
+ #   lat = row['lat']
+  #  lon = row['lng']
     
-    if lat > 35 and lon < -90 and lon > -110:
-        return 'CENTRAL'
-    elif lat > 35 and lon > -90:
-        return 'EAST'
-    elif lat < 35:
-        return 'SOUTH'
-    elif lat > 35 and lon < -110:
-        return 'WEST'
-    else:
-        return 'UNKNOWN'
+  #  if lat > 35 and lon < -90 and lon > -110:
+  #      return 'CENTRAL'
+  #  elif lat > 35 and lon > -90:
+  #      return 'EAST'
+  #  elif lat < 35:
+  #      return 'SOUTH'
+  #  elif lat > 35 and lon < -110:
+  #      return 'WEST'
+   # else:
+   #     return 'UNKNOWN'
 
 # Apply the function to every row (axis=1)
-df_fullclean['REGION'] = df_fullclean.apply(assign_region, axis=1)
+#df_fullclean['REGION'] = df_fullclean.apply(assign_region, axis=1)
 
 #Psuedo-negatives
-num_negatives = int(len(df_fullclean)*0.1)
+num_negatives = int(len(df_fullclean)*0.5)
 
 #Generate random data within the same range as your real data
 negatives = pd.DataFrame({
@@ -78,7 +101,7 @@ negatives = pd.DataFrame({
     'DAMAGE_PROPERTY': 0.0
 })
 
-negatives['REGION'] = negatives.apply(assign_region, axis=1)
+#negatives['REGION'] = negatives.apply(assign_region, axis=1)
 
 #Merging cases + pseudo-negatives
 df_combined = pd.concat([df_fullclean, negatives], ignore_index=True)
@@ -86,7 +109,7 @@ df_combined = pd.concat([df_fullclean, negatives], ignore_index=True)
 print(f"Original size: {len(df_fullclean)}")
 print(f"New size: {len(df_combined)}")
 
-#Creating dataset for dmg
+df_combined = df_combined.sample(n=500000, random_state=42)
 
 #Training event
 X = df_combined[['lat', 'lng', 'BEGIN_MONTH', 'BEGIN_DAY']]

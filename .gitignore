@@ -1,3 +1,4 @@
-ultimate_clean.csv
-StormEvents_cleaned.csv
-mydoc.db
+# Ignore massive datasets and databases
+*.csv
+*.db
+raw_noaa_data/
