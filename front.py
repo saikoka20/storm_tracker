@@ -110,8 +110,22 @@ if page == "🔮 Predictor":
     with col2:
         st.subheader("📅 Date")
         # (Your existing date code goes here)
-        user_month = st.slider("Month", 1, 12, 1)
-        user_day = st.slider("Day", 1, 31, 15)
+        # 1. The user picks the month FIRST
+        user_month = st.slider("Month", min_value=1, max_value=12, value=1)
+
+        # 2. Logic to determine the maximum days in that specific month
+        if user_month in [4, 6, 9, 11]:
+            # April, June, September, November have 30 days
+            max_days = 30
+        elif user_month == 2:
+            # February gets 29 days (allowing for leap-year predictions since we don't ask for a Year!)
+            max_days = 29
+        else:
+            # All other months have 31 days
+            max_days = 31
+
+        # 3. Create the Day slider, dynamically locking its max_value to the variable we just created
+        user_day = st.slider("Day", min_value=1, max_value=max_days, value=1)
 
 
 
@@ -167,32 +181,33 @@ if page == "🔮 Predictor":
             # "Any Storm" is just 100% minus the chance of Clear Skies
             storm_prob = max(probabilities)
 
-            if storm_prob >= 0.35 and storm_prob != clear_skies_prob:
+            if storm_prob >= 0.30 and storm_prob != clear_skies_prob:
                 st.error(f"🚨 **STORM WARNING:** The probability ({storm_prob*100:.1f}%) exceeds your threshold!")
                 st.warning(f"**Estimated Property Damage:** ${damage_pred:,.2f}")
             # Add your damage model prediction here if a storm is triggered!
-            else:
-                st.success(f"☀️ **CLEAR SKIES:** The probability ({storm_prob*100:.1f}%) did not trigger the warning.")
+            
             
                         
-            # Create a dataframe for the probabilities to chart them easily
-            prob_df = pd.DataFrame({
-                "Storm Type": classes,
-                "Probability": probabilities
-            }).set_index("Storm Type")
+                # Create a dataframe for the probabilities to chart them easily
+                prob_df = pd.DataFrame({
+                    "Storm Type": classes,
+                    "Probability": probabilities
+                }).set_index("Storm Type")
 
-            filtered_prob_df = prob_df[prob_df["Probability"] >= 0.05]
-            
-            st.subheader("Probability Breakdown")
-            
-            # Display as a Bar Chart
-            st.bar_chart(filtered_prob_df)
-            
-            # Optional: Display raw text data like your original script
-            with st.expander("See detailed percentages"):
-                for storm_name, prob in zip(classes, probabilities):
-                    if prob >= 0.05:
-                        st.write(f"{storm_name}: **{prob:.1%}**")
+                filtered_prob_df = prob_df[prob_df["Probability"] >= 0.05]
+                
+                st.subheader("Probability Breakdown")
+                
+                # Display as a Bar Chart
+                st.bar_chart(filtered_prob_df)
+                
+                # Optional: Display raw text data like your original script
+                with st.expander("See detailed percentages"):
+                    for storm_name, prob in zip(classes, probabilities):
+                        if prob >= 0.05:
+                            st.write(f"{storm_name}: **{prob:.1%}**")
+            else:
+                st.success(f"☀️ **CLEAR SKIES:** The probability ({storm_prob*100:.1f}%) did not trigger the warning.")
 
         except Exception as e:
             st.error(f"An error occurred during prediction: {e}")
